@@ -1,0 +1,111 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>k8s-setup</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__html"><h1 id="k8s-training-commands">K8s Training Commands</h1>
+<h2 id="basic-setup-on-all-servers">Basic Setup on all servers</h2>
+<p><strong>&gt;</strong> yum install -y vim git wget yum-utils device-mapper-persistent-data lvm2</p>
+<h2 id="install-docker">Install docker</h2>
+<p><strong>&gt;</strong> yum-config-manager --add-repo <a href="https://download.docker.com/linux/centos/docker-ce.repo">https://download.docker.com/linux/centos/docker-ce.repo</a><br>
+<strong>&gt;</strong> yum install docker-ce-18.06.1.ce<br>
+<strong>&gt;</strong> systemctl start docker</p>
+<h2 id="get-kubectl">Get Kubectl</h2>
+<p><strong>&gt;&gt;</strong> wget <a href="https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kubectl">https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kubectl</a><br>
+<strong>&gt;&gt;</strong> chmod +x kubectl<br>
+<strong>&gt;&gt;</strong> mv kubectl /usr/bin</p>
+<h2 id="minikube">Minikube</h2>
+<p>wget <a href="https://github.com/kubernetes/minikube/releases/download/v0.33.1/minikube-linux-amd64">https://github.com/kubernetes/minikube/releases/download/v0.33.1/minikube-linux-amd64</a><br>
+mv minikube-linux-amd64 /usr/bin/<br>
+chmod +x /usr/bin/minikube<br>
+minikube start --vm-driver none</p>
+<h2 id="basic-kubectl-commands-smoke-test">Basic Kubectl commands (smoke test)</h2>
+<p>kubectl get nodes<br>
+kubectl run nginx --image=nginx<br>
+kubectl get pods<br>
+kubectl describe pod <br>
+kubectl expose deployment nginx --port 80 --type NodePort<br>
+kubectl get svc</p>
+<h2 id="get-kubernetes-binaries">Get Kubernetes binaries</h2>
+<p><strong>&gt;&gt;</strong> wget <a href="https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kube-apiserver">https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kube-apiserver</a><br>
+<strong>&gt;&gt;</strong> wget <a href="https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kube-controller-manager">https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kube-controller-manager</a><br>
+<strong>&gt;&gt;</strong> wget <a href="https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kube-scheduler">https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kube-scheduler</a><br>
+<strong>&gt;&gt;</strong> wget <a href="https://github.com/coreos/flannel/releases/download/v0.10.0/flanneld-amd64">https://github.com/coreos/flannel/releases/download/v0.10.0/flanneld-amd64</a><br>
+<strong>&gt;&gt;</strong> mv flanneld-amd64 flanneld<br>
+<strong>&gt;&gt;</strong> chmod +x kube-apiserver kube-controller-manager kube-scheduler flanneld<br>
+<strong>&gt;&gt;</strong> mv kube-apiserver kube-controller-manager kube-scheduler flanneld /usr/bin/</p>
+<h2 id="generate-kubernetes-config">Generate Kubernetes Config</h2>
+<p><strong>&gt;</strong> git clone <strong>&lt;config_repo&gt;</strong><br>
+<strong>&gt;</strong> bash <a href="http://gencert-kubernetes.sh">gencert-kubernetes.sh</a><br>
+<strong>&gt;</strong> bash <a href="http://gencert-kubeapiserver.sh">gencert-kubeapiserver.sh</a> <strong>&lt;apiserver_ip_csv&gt;</strong><br>
+<strong>&gt;</strong> bash <a href="http://genconf-kubernetes.sh">genconf-kubernetes.sh</a><br>
+<strong>&gt;</strong> scp *.pem root@<strong>&lt;server_IP&gt;</strong><br>
+<strong>&gt;</strong> for ip in <strong>&lt;server2_ip&gt; &lt;server3_ip&gt;</strong><br>
+do<br>
+&nbsp;&nbsp;  scp *.pem *.kubeconfig root@${ip}:k8s-conf/<br>
+done</p>
+<p><strong>&gt;</strong> for ip in <strong>&lt;etcd1_ip&gt;  &lt;etcd2_ip&gt; &lt;etcd3_ip&gt;</strong><br>
+do<br>
+&nbsp;&nbsp; scp ${ip}.kube-apiserver.service root@${ip}:/etc/systemd/system/kube-apiserver.service<br>
+&nbsp;&nbsp;    scp kube-controller-manager.service kube-scheduler.service root@${ip}:/etc/systemd/system/<br>
+done</p>
+<p><strong>&gt;&gt;</strong> cp ca.pem ca-key.pem kubernetes-key.pem kubernetes.pem service-account-key.pem service-account.pem kube-controller-manager.kubeconfig kube-scheduler.kubeconfig /var/lib/kubernetes/<br>
+<strong>&gt;&gt;</strong> mkdir -p /etc/kubernetes/config/<br>
+<strong>&gt;&gt;</strong> cp kube-scheduler.yaml /etc/kubernetes/config/kube-scheduler.yaml</p>
+<h2 id="setup-etcd">Setup etcd</h2>
+<p><strong>&gt;&gt;</strong> yum install -y etcd<br>
+<strong>&gt;</strong> cd <strong>&lt;config_repo&gt;</strong><br>
+<strong>&gt;</strong> bash <a href="http://etcd.conf.sh">etcd.conf.sh</a> <strong>&lt;etcd1_ip&gt;  &lt;etcd2_ip&gt; &lt;etcd3_ip&gt;</strong></p>
+<p><strong>&gt;</strong> for ip in <strong>&lt;etcd1_ip&gt;  &lt;etcd2_ip&gt; &lt;etcd3_ip&gt;</strong><br>
+do<br>
+&nbsp;&nbsp; scp ${ip}.etcd.conf  root@${ip}:/etc/etcd/etcd.conf<br>
+&nbsp;&nbsp;  scp kubernetes.pem kubernetes-key.pem ca.pem /etc/etcd/<br>
+done</p>
+<p><strong>&gt;&gt;</strong> systemctl restart etcd</p>
+<h2 id="configure-flannel">Configure flannel</h2>
+<p><strong>&gt;&gt;</strong> mkdir /var/lib/kubernetes<br>
+<strong>&gt;&gt;</strong> bash <a href="http://genconf-flannel.sh">genconf-flannel.sh</a> &lt;etcd1_ip&gt; &lt;etcd2_ip&gt; &lt;etcd3_ip&gt;<br>
+<strong>&gt;&gt;</strong> cp flannel.service /etc/systemd/system/<br>
+<strong>&gt;&gt;</strong> cd <strong>&lt;config_repo&gt;</strong><br>
+<strong>&gt;&gt;</strong> cp ca.pem /var/lib/kubernetes<br>
+<strong>&gt;</strong> etcdctl --endpoints=https://127.0.0.1:2379 --ca-file=/etc/etcd/ca.pem set /coreos.com/network/config ‘{“Network”: “10.200.0.0/16”, “SubnetLen”:24, “Backend”: {“Type”: “vxlan”}}’</p>
+<h2 id="start-kubernetes">Start Kubernetes</h2>
+<p><strong>&gt;&gt;</strong> systemctl daemon-reload<br>
+<strong>&gt;&gt;</strong> systemctl restart flannel kube-apiserver kube-controller-manager kube-scheduler<br>
+<strong>&gt;&gt;</strong> kubectl get componentstatuses --kubeconfig admin.kubeconfig</p>
+<h2 id="setup-kubelet">Setup Kubelet</h2>
+<p>yum install -y socat conntrack ipset yum-utils device-mapper-persistent-data lvm2 vim git wget<br>
+wget   <a href="https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kubectl">https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kubectl</a>   <a href="https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kube-proxy">https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kube-proxy</a>   <a href="https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kubelet">https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kubelet</a><br>
+Setup Flannel<br>
+mkdir -p /opt/cni/bin/; cd /opt/cni/bin/<br>
+wget <a href="https://github.com/containernetworking/plugins/releases/download/v0.7.4/cni-plugins-amd64-v0.7.4.tgz">https://github.com/containernetworking/plugins/releases/download/v0.7.4/cni-plugins-amd64-v0.7.4.tgz</a><br>
+tar -xzvf cni-plugins-amd64-v0.7.4.tgz<br>
+mkdir -p /var/lib/kubernetes/cni/net.d<br>
+cd <strong>&lt;config_repo&gt;</strong></p>
+<p>cp 10-flannel.conf /var/lib/kubernetes/cni/net.d/10-flannel.conf</p>
+<p>yum-config-manager --add-repo <a href="https://download.docker.com/linux/centos/docker-ce.repo">https://download.docker.com/linux/centos/docker-ce.repo</a><br>
+yum install -y docker-ce-18.06.1.ce<br>
+bash <a href="http://gencert-kubelet.sh">gencert-kubelet.sh</a> <strong>&lt;kubelet_ip&gt;</strong><br>
+bash <a href="http://genconf-kubelet.sh">genconf-kubelet.sh</a> <strong>&lt;apiserver_ip&gt; &lt;kubelet_ip&gt;</strong><br>
+mkdir /var/lib/kubelet/<br>
+mv <strong>&lt;kubelet_ip&gt;</strong>-key.pem <strong>&lt;kubelet_ip&gt;</strong>.pem /var/lib/kubelet/<br>
+mv <strong>&lt;kubelet_ip&gt;</strong>.kubeconfig /var/lib/kubelet/kubeconfig<br>
+mv <strong>&lt;kubelet_ip&gt;</strong>.kubelet-config.yaml /var/lib/kubelet/kubelet-config.yaml<br>
+mv <strong>&lt;kubelet_ip&gt;</strong>.kubelet.service /etc/systemd/system/kubelet.service<br>
+mkdir /var/lib/kube-proxy/<br>
+mv kube-proxy.kubeconfig /var/lib/kube-proxy/kubeconfig<br>
+mv kube-proxy-config.yaml /var/lib/kube-proxy/kube-proxy-config.yaml<br>
+mv kube-proxy.service /etc/systemd/system/kube-proxy.service</p>
+<p>systemctl start docker<br>
+systemctl daemon-reload<br>
+systemctl restart flannel kube-apiserver kube-controller-manager kube-scheduler</p>
+</div>
+</body>
+
+</html>
